@@ -1,13 +1,22 @@
-module Expression
-    (Expression, equivalentPropositions)
+module Expression (
+    Operator (..), 
+    Expression (..), 
+    equivalentPropositions, contradictoryPropositions,
+    operatorCharMap,
+    evaluateFitch
+)
 where
 
 import Data.Set (Set, union, empty, singleton, toList)
 import Data.Map (Map, member, (!))
 import Data.Maybe (fromJust)
 import qualified Data.Map
+import Control.Applicative (liftA2)
 
-data Expression = Variable Char | Bottom | Not Expression | And Expression Expression | Or Expression Expression
+data Operator = And | Or | Implies | Iff deriving (Enum, Show, Eq, Ord, Bounded)
+
+data Expression = Variable Char | Bottom | Not Expression 
+                    | Expr Operator Expression Expression
                 deriving (Show, Eq, Ord)
 
 type FitchContext = Map Char Bool
@@ -15,13 +24,18 @@ type FitchContext = Map Char Bool
 mapFromList :: (Ord a) => [(a,b)] -> Map a b
 mapFromList = Data.Map.fromList
 
+operatorCharMap :: Map Char Operator
+operatorCharMap = mapFromList [('∧',And),('∨',Or),('→',Implies),('↔',Iff)]
+
+operatorEvaluationMap :: Map Operator (Bool -> Bool -> Bool)
+operatorEvaluationMap = mapFromList [(And, (&&)),(Or, (||)),(Implies, (\x y->not x||y)),(Iff, (==))]
+
 getVariables :: Expression -> Set Char
 
 getVariables (Variable c) = singleton c
 getVariables (Bottom) = empty
 getVariables (Not expr) = getVariables expr
-getVariables (And expr1 expr2) = union (getVariables expr1) $ (getVariables expr2)
-getVariables (Or expr1 expr2) = union (getVariables expr1) $ (getVariables expr2)
+getVariables (Expr _ expr1 expr2) = union (getVariables expr1) $ (getVariables expr2)
 
 evaluateFitch :: FitchContext -> Expression -> Maybe Bool
 
@@ -29,9 +43,9 @@ evaluateFitch context (Variable c)
     | member c context = Just (context ! c)
     | otherwise = Nothing
 
-evaluateFitch context (And expr1 expr2) = (fmap (&&) (evaluateFitch context expr1)) <*> (evaluateFitch context expr2)
-evaluateFitch context (Or expr1 expr2) = (fmap (||) (evaluateFitch context expr1)) <*> (evaluateFitch context expr2)
 evaluateFitch context (Not expr) = fmap not (evaluateFitch context expr)
+evaluateFitch context (Expr op expr1 expr2) = liftA2 f (evaluateFitch context expr1) (evaluateFitch context expr2)
+    where f = operatorEvaluationMap!op
 evaluateFitch _ Bottom = Nothing
 
 allBooleans :: Int -> [[Bool]]
@@ -49,3 +63,11 @@ equivalentPropositions :: Expression -> Expression -> Bool
 equivalentPropositions expr1 expr2 = all id (map maybeEquals (map evaluateFitch contexts))
     where contexts = allContexts [expr1, expr2]
           maybeEquals = (\f -> fromJust (f expr1) == fromJust (f expr2))
+
+contradictoryPropositions :: [Expression] -> Bool
+
+contradictoryPropositions [expr] = all (not . fromJust . ($ expr)) (map evaluateFitch contexts)
+    where contexts = allContexts [expr]
+
+contradictoryPropositions (expr:exprs) = contradictoryPropositions [foldr (Expr And) expr exprs]
+contradictoryPropositions [] = False
