@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       Expression
+      ExpressionEvaluator
       FitchTransform
       Lib
   other-modules:

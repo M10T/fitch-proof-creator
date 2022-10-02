@@ -2,7 +2,8 @@ module FitchTransform
     (transformExpressions)
 where
 
-import Expression (Expression, equivalentPropositions, contradictoryPropositions)
+import Expression (Expression)
+import ExpressionEvaluator (equivalentPropositions, contradictoryPropositions)
 
 transformExpressions :: [Expression] -> Expression -> Maybe [Expression]
 

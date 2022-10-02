@@ -1,17 +1,15 @@
-module Expression (
-    Operator (..), 
-    Expression (..), 
-    equivalentPropositions, contradictoryPropositions,
-    operatorCharMap,
-    evaluateFitch
-)
+module Expression
+    (
+        Expression (..),
+        Operator (..)
+    )
 where
 
-import Data.Set (Set, union, empty, singleton, toList)
 import Data.Map (Map, member, (!))
+import Control.Applicative (liftA2)
+import Control.Monad (join)
 import Data.Maybe (fromJust)
 import qualified Data.Map
-import Control.Applicative (liftA2)
 
 data Operator = And | Or | Implies | Iff deriving (Enum, Show, Eq, Ord, Bounded)
 
@@ -19,7 +17,10 @@ data Expression = Variable Char | Bottom | Not Expression
                     | Expr Operator Expression Expression
                 deriving (Show, Eq, Ord)
 
-type FitchContext = Map Char Bool
+data LogicToken = GroupingToken [LogicToken] | VariableToken Char | NotToken
+                    | OperatorToken Operator
+                    | ResolvedToken (Maybe Expression)
+                    deriving (Show)
 
 mapFromList :: (Ord a) => [(a,b)] -> Map a b
 mapFromList = Data.Map.fromList
@@ -27,47 +28,69 @@ mapFromList = Data.Map.fromList
 operatorCharMap :: Map Char Operator
 operatorCharMap = mapFromList [('∧',And),('∨',Or),('→',Implies),('↔',Iff)]
 
-operatorEvaluationMap :: Map Operator (Bool -> Bool -> Bool)
-operatorEvaluationMap = mapFromList [(And, (&&)),(Or, (||)),(Implies, (\x y->not x||y)),(Iff, (==))]
 
-getVariables :: Expression -> Set Char
+tokenToExpression :: LogicToken -> Maybe Expression
 
-getVariables (Variable c) = singleton c
-getVariables (Bottom) = empty
-getVariables (Not expr) = getVariables expr
-getVariables (Expr _ expr1 expr2) = union (getVariables expr1) $ (getVariables expr2)
+tokenToExpression (GroupingToken tokens) = tokensToExpression tokens
+tokenToExpression (VariableToken c) = Just (Variable c)
+tokenToExpression (ResolvedToken expr) = expr
+tokenToExpression _ = Nothing
 
-evaluateFitch :: FitchContext -> Expression -> Maybe Bool
+reduceGroupTokens :: [LogicToken] -> [LogicToken]
 
-evaluateFitch context (Variable c)
-    | member c context = Just (context ! c)
+reduceGroupTokens [] = []
+reduceGroupTokens (x:xs) = case x of 
+    GroupingToken tokens -> (ResolvedToken $ tokensToExpression tokens):(reduceGroupTokens xs)
+    _ -> x:(reduceGroupTokens xs)
+
+reduceNotTokens :: [LogicToken] -> [LogicToken]
+
+reduceNotTokens (x1:x2:xs) = case x1 of
+    NotToken -> (ResolvedToken (fmap Not $ tokenToExpression x2)) : (reduceNotTokens xs)
+    _ -> x1:(reduceNotTokens (x2:xs))
+reduceNotTokens xs = xs
+
+reduceOperatorTokens :: Operator -> [LogicToken] -> [LogicToken]
+reduceOperatorTokens op (x1:x2:x3:xs) = case x2 of
+    OperatorToken op1 | op1 == op -> (ResolvedToken $ (fmap (Expr op) $ (tokenToExpression x1)) <*> tokenToExpression x3)
+        : (reduceOperatorTokens op xs)
+    _ -> x1:x2:(reduceOperatorTokens op (x3:xs))
+
+reduceOperatorTokens _ xs = xs
+
+tokensToExpression :: [LogicToken] -> Maybe Expression
+
+tokensToExpression [token] = tokenToExpression token
+tokensToExpression tokens = case endReduced of
+    [e] -> tokenToExpression e
+    _ -> Nothing
+    where initReduced = reduceNotTokens . reduceGroupTokens $ tokens
+          ops = [(minBound :: Operator) ..]
+          endReduced = foldr (.) id (map reduceOperatorTokens ops) $ initReduced
+
+balancedParens :: String -> Int -> String
+
+balancedParens [] _ = []
+balancedParens [x] n 
+    | n == 0 = []
+    | otherwise = [x]
+balancedParens (x:xs) n
+    | n == 0 = []
+    | x == '(' = x:(balancedParens xs (n+1))
+    | x == ')' = x:(balancedParens xs (n-1))
+    | otherwise = x:(balancedParens xs n)
+
+stringToTokens :: String -> Maybe [LogicToken]
+
+stringToTokens [] = Just []
+stringToTokens (x:xs)
+    | elem x ['A'..'Z'] = fmap ((:) (VariableToken x)) (stringToTokens xs)
+    | member x operatorCharMap = fmap ((:) (OperatorToken $ operatorCharMap!x)) (stringToTokens xs)
+    | x == '~' = fmap (NotToken:) (stringToTokens xs)
+    | x == '(' = liftA2 ((:) . GroupingToken) (stringToTokens $ init groupSection) (stringToTokens remainder)
     | otherwise = Nothing
+        where groupSection = balancedParens xs 1
+              remainder = drop (length groupSection) xs
 
-evaluateFitch context (Not expr) = fmap not (evaluateFitch context expr)
-evaluateFitch context (Expr op expr1 expr2) = liftA2 f (evaluateFitch context expr1) (evaluateFitch context expr2)
-    where f = operatorEvaluationMap!op
-evaluateFitch _ Bottom = Nothing
-
-allBooleans :: Int -> [[Bool]]
-
-allBooleans 1 =  [[True], [False]]
-allBooleans n = [x++y | x <- (allBooleans $ n-1), y <- (allBooleans 1)]
-
-allContexts :: [Expression] -> [FitchContext]
-
-allContexts exprs = map (mapFromList . zip allVars) (allBooleans (length allVars))
-   where allVars = toList $ (foldr union) empty (map getVariables exprs)
-
-equivalentPropositions :: Expression -> Expression -> Bool
-
-equivalentPropositions expr1 expr2 = all id (map maybeEquals (map evaluateFitch contexts))
-    where contexts = allContexts [expr1, expr2]
-          maybeEquals = (\f -> fromJust (f expr1) == fromJust (f expr2))
-
-contradictoryPropositions :: [Expression] -> Bool
-
-contradictoryPropositions [expr] = all (not . fromJust . ($ expr)) (map evaluateFitch contexts)
-    where contexts = allContexts [expr]
-
-contradictoryPropositions (expr:exprs) = contradictoryPropositions [foldr (Expr And) expr exprs]
-contradictoryPropositions [] = False
+instance Read (Expression) where
+    readsPrec _ s = [(fromJust $ join $ (fmap tokensToExpression) $ stringToTokens $ s, "")]
