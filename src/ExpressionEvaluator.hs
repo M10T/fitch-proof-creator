@@ -1,5 +1,7 @@
 module ExpressionEvaluator (
-    equivalentPropositions, contradictoryPropositions,
+    equivalentPropositions, 
+    contradictoryPropositions,
+    impliedProposition,
     evaluateFitch
 )
 where
@@ -60,3 +62,19 @@ contradictoryPropositions [expr] = all (not . fromJust . ($ expr)) (map evaluate
 
 contradictoryPropositions (expr:exprs) = contradictoryPropositions [foldr (Expr And) expr exprs]
 contradictoryPropositions [] = False
+
+impliedProposition :: [Expression] -> Expression -> Bool
+
+impliedProposition [] _ = False
+impliedProposition (premise:premises) result = all (fromJust . ($ result)) $ filter (fromJust . ($ totalPremise)) $ mappedContexts
+    where contexts = allContexts $ result:premise:premises
+          totalPremise = foldr (Expr And) premise premises
+          mappedContexts = map evaluateFitch contexts
+
+isTautology :: Expression -> Bool
+
+isTautology expr = all ( fromJust . ($ expr)) (map evaluateFitch contexts)
+    where contexts = allContexts [expr]
+
+directProvable :: [Expression] -> Expression -> Bool
+directProvable exprs (Variable c) = 
