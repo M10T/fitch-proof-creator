@@ -27,7 +27,6 @@ library
   exposed-modules:
       Expression
       ExpressionEvaluator
-      ExpressionTree
       FitchTransform
       Lib
   other-modules:
