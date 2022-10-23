@@ -1,6 +1,12 @@
 module Lib
-    ( someFunc
+    (
+      module Expression,
+      module ExpressionEvaluator,
+      module FitchDisplay,
+      module FitchTransform
     ) where
 
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"
+import Expression
+import ExpressionEvaluator
+import FitchDisplay
+import FitchTransform

@@ -27,6 +27,7 @@ library
   exposed-modules:
       Expression
       ExpressionEvaluator
+      FitchDisplay
       FitchTransform
       Lib
   other-modules:
@@ -48,8 +49,10 @@ executable fitch-proof-creator-exe
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , blaze-html
     , containers
     , fitch-proof-creator
+    , happstack-server
   default-language: Haskell2010
 
 test-suite fitch-proof-creator-test

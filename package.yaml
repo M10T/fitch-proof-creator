@@ -49,6 +49,8 @@ executables:
     dependencies:
     - fitch-proof-creator
     - containers
+    - happstack-server
+    - blaze-html
 
 tests:
   fitch-proof-creator-test:

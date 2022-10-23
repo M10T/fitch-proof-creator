@@ -10,17 +10,30 @@ import Control.Applicative (liftA2)
 import Control.Monad (join)
 import Data.Maybe (fromJust)
 import qualified Data.Map
+import Data.Char (isSpace)
 
 data Operator = And | Or | Implies | Iff deriving (Enum, Show, Eq, Ord, Bounded)
 
 data Expression = Variable Char | Bottom | Not Expression 
                     | Expr Operator Expression Expression
-                deriving (Show, Eq, Ord)
+                deriving (Eq, Ord)
 
 data LogicToken = GroupingToken [LogicToken] | VariableToken Char | NotToken
                     | OperatorToken Operator
                     | ResolvedToken (Maybe Expression)
                     deriving (Show)
+
+instance Show Expression where
+    show (Variable c) = [c]
+    show (Not (Variable c)) = "~"++[c]
+    show (Not e1) = "~("++(show e1)++")"
+    show Bottom = "⊥"
+    show (Expr op e1 e2) = case (e1,e2) of
+        ((Expr _ _ _),(Expr _ _ _))->"("++(show e1)++")"++[opC]++"("++(show e2)++")"
+        ((Expr _ _ _),_)->"("++(show e1)++")"++[opC]++(show e2)
+        (_,(Expr _ _ _))->(show e1)++[opC]++"("++(show e2)++")"
+        _ -> (show e1) ++ [opC] ++ (show e2)
+        where (opC,_)=head $ filter (\(_,o)->o==op) (Data.Map.toList operatorCharMap)
 
 mapFromList :: (Ord a) => [(a,b)] -> Map a b
 mapFromList = Data.Map.fromList
@@ -84,6 +97,8 @@ stringToTokens :: String -> Maybe [LogicToken]
 
 stringToTokens [] = Just []
 stringToTokens (x:xs)
+    | isSpace x = stringToTokens xs
+    | x == '⊥' = fmap ((:) (ResolvedToken $ Just Bottom)) (stringToTokens xs)
     | elem x ['A'..'Z'] = fmap ((:) (VariableToken x)) (stringToTokens xs)
     | member x operatorCharMap = fmap ((:) (OperatorToken $ operatorCharMap!x)) (stringToTokens xs)
     | x == '~' = fmap (NotToken:) (stringToTokens xs)

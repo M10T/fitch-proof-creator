@@ -37,7 +37,7 @@ evaluateFitch context (Variable c)
 evaluateFitch context (Not expr) = fmap not (evaluateFitch context expr)
 evaluateFitch context (Expr op expr1 expr2) = liftA2 f (evaluateFitch context expr1) (evaluateFitch context expr2)
     where f = operatorEvaluationMap!op
-evaluateFitch _ Bottom = Nothing
+evaluateFitch _ Bottom = Just False
 
 allBooleans :: Int -> [[Bool]]
 
