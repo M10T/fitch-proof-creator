@@ -39,7 +39,7 @@ mapFromList :: (Ord a) => [(a,b)] -> Map a b
 mapFromList = Data.Map.fromList
 
 operatorCharMap :: Map Char Operator
-operatorCharMap = mapFromList [('∧',And),('∨',Or),('→',Implies),('↔',Iff)]
+operatorCharMap = mapFromList [('&',And),('v',Or),('→',Implies),('↔',Iff)]
 
 
 tokenToExpression :: LogicToken -> Maybe Expression
@@ -96,6 +96,10 @@ balancedParens (x:xs) n
 stringToTokens :: String -> Maybe [LogicToken]
 
 stringToTokens [] = Just []
+stringToTokens (x:xs)
+    | x=='!' = stringToTokens ('⊥':xs)
+stringToTokens (x:y:xs)
+    | [x,y]=="=>" = stringToTokens ('→':xs)
 stringToTokens (x:xs)
     | isSpace x = stringToTokens xs
     | x == '⊥' = fmap ((:) (ResolvedToken $ Just Bottom)) (stringToTokens xs)

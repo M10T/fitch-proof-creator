@@ -2,11 +2,24 @@
 module Main (Main.main) where
 
 import Lib
-import Happstack.Server (ok, toResponse, simpleHTTP, nullConf, ServerPart, Response, dir)
+import Happstack.Server
+    ( Response, ServerPart, Method(POST)
+    , BodyPolicy(..), decodeBody, defaultBodyPolicy
+    , dir, look, nullConf, ok, simpleHTTP
+    , toResponse, methodM, body
+    )
 import Control.Monad (msum)
 import qualified Text.Blaze.Html5 as H
 import Text.Blaze.Html5 ((!))
 import qualified Text.Blaze.Html5.Attributes as A
+import Happstack.Server ( Browsing(EnableBrowsing), nullConf
+                        , serveDirectory, simpleHTTP
+                        )
+import Happstack.Server.RqData (RqData, look, getDataFn, lookTexts)
+import Data.Char (isSpace)
+
+
+
 
 appTemplate :: String -> H.Html -> H.Html
 appTemplate title body =
@@ -16,6 +29,7 @@ appTemplate title body =
         H.meta ! A.httpEquiv "Content-Type"
                ! A.content "text/html;charset=utf-8"
         H.script ! A.src "https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js" $ ""
+        H.script ! A.src "/static/premise_script.js" $ ""
       H.body $ do
         body
 
@@ -24,41 +38,48 @@ serverResp = ok $ toResponse $ appTemplate "Fitch Proof Creator"
                 (do
                     H.h2 $ "Proof Parameters:"
                     H.form ! A.id "premise_form" 
-                           ! A.target "" $ do 
+                           ! A.target "proof_loc" 
+                           ! A.method "POST"
+                           ! A.action "/proof" $ do 
                         H.label "Premise: " >> H.input ! A.type_ "text"
                                                        ! A.name "premise"
-                        H.br ! A.id "submit"
+                        H.br
+                        H.label ! A.id "lResult" $ "Result: " >> H.input ! A.id "result" 
+                                                                         ! A.type_ "text" 
+                                                                         ! A.name "result"
+                        H.br ! A.class_ "submit"
                         H.button  $ "Submit"
                     H.button ! A.onclick "add_premise()" $ "Add Premise"
                     H.button ! A.onclick "remove_premise()" $ "Remove Premise"
-                    H.br
-                    H.br
+                    H.br ! A.class_ "submit "
+                    H.br ! A.class_ "submit"
                     H.h2 "Proof:"
-                    H.iframe ! A.name "proof_loc" $ ""
-                    H.script $ H.toHtml scriptJs
+                    H.iframe ! A.name "proof_loc" ! A.width "500" ! A.height "400" $ ""
                 )
 
-scriptJs:: String
-scriptJs = "\n\
-    \function add_premise() {\n\
-    \   const form = document.getElementById(\"premise_form\")\n\
-    \   const button = document.getElementById(\"submit\")\n\
-    \   const newInput = document.createElement(\"input\")\n\
-    \   newInput.type = \"text\"\n\
-    \   newInput.name = \"premise\"\n\
-    \   const newLabel = document.createElement(\"label\")\n\
-    \   newLabel.innerHTML = \"Premise: \"\n\
-    \   form.insertBefore(document.createElement(\"br\"),button)\n\
-    \   form.insertBefore(newLabel,button)\n\
-    \   form.insertBefore(newInput,button)\n\
-    \}\n\
-    \function remove_premise() {\n\
-    \   if ($('input').size() <= 1) return;\n\
-    \   $(\"input\").last().remove()\n\
-    \   $(\"label\").last().remove()\n\
-    \   $(\"br:not(#submit)\").last().remove()\n\
-    \}"
+formResp :: ServerPart Response
+formResp = 
+    do methodM POST
+       decodeBody (defaultBodyPolicy "/tmp/" 0 1000 1000)
+       premises0 <- body $ lookTexts "premise" 
+       let premises = filter (not . null . (dropWhile isSpace)) $ map (tail . init . show) premises0
+       result <- body $ look "result"
+       let exprPremises = map (f . tail . init . show) premises
+       let exprResult = (f . tail . init . show) result 
+       let proof = safeTransformProof (proofGiven exprPremises) exprResult
+       let res = disp proof
+       ok $ toResponse $ H.div (foldl (>>) (head res) (tail res))
+    where f = (read::(String->Expression))
+          line "" = H.br
+          line s = H.p $ H.toHtml s
+          disp :: Maybe FitchProof -> [H.Html]
+          disp (Just x) = map line ((proofToLines . removeDuplicates) x)
+          disp (Nothing) = []
 
 main :: IO ()
 main = simpleHTTP nullConf $ msum 
-    [dir "index" $ serverResp]
+    [
+        dir "index" $ serverResp,
+        dir "static" $ serveDirectory EnableBrowsing [] "./scripts",
+        dir "proof" $ formResp
+    ]
