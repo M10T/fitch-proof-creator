@@ -8,7 +8,8 @@ module FitchTransform
         matchingExpression,
         matchingSubproof,
         matchingScoped,
-        matchingScopedExpression
+        matchingScopedExpression,
+        appendSection
     )
 where
 
@@ -88,6 +89,10 @@ removeLast (TopProof []) = TopProof []
 removeLast (Proof parent []) = Proof parent []
 removeLast (TopProof xs) = TopProof $ init xs
 removeLast (Proof parent xs) = Proof parent $ init xs
+
+appendSection :: FitchProof -> ProofSection -> FitchProof
+appendSection (TopProof xs) s = TopProof (xs++[s])
+appendSection (Proof p xs) s = Proof p (xs++[s])
 
 directIntroduction :: Expression -> ProofSection -> Bool
 directIntroduction e1 (Given e2) = direct e1 e2

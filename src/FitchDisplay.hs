@@ -17,7 +17,8 @@ subEq (SubProof (Proof _ p1)) (SubProof (Proof _ p2)) = p1 == p2
 subEq _ _ = False
 
 removeDuplicates :: FitchProof -> FitchProof
-removeDuplicates p = removeDuplicatesHelper (TopProof []) p
+removeDuplicates (TopProof p) = removeDuplicatesHelper (TopProof []) (TopProof p)
+removeDuplicates (Proof o p) = removeDuplicatesHelper (Proof o []) (TopProof p)
 
 removeDuplicatesHelper :: FitchProof -> FitchProof -> FitchProof
 removeDuplicatesHelper acc (TopProof []) = acc
@@ -25,13 +26,15 @@ removeDuplicatesHelper acc (Proof p xs) = Proof p fixed
     where (TopProof fixed) = removeDuplicatesHelper acc (TopProof xs)
 removeDuplicatesHelper acc outer = case x of
     SubProof p1 | matchingScoped (subEq $ SubProof (removeDuplicates p1)) acc -> removeDuplicatesHelper acc (TopProof xs)
-    SubProof p1 -> removeDuplicatesHelper (TopProof $ as++[SubProof $ removeDuplicates p1]) (TopProof xs)
-    Given e -> removeDuplicatesHelper (TopProof $ as++[Given e]) (TopProof xs)
+    SubProof p1 -> removeDuplicatesHelper (appendSection acc (SubProof $ removeDuplicates p1)) (TopProof xs)
+    Given e -> removeDuplicatesHelper (appendSection acc (Given e)) (TopProof xs)
     Implication e | matchingScoped (==Implication e) acc -> removeDuplicatesHelper acc (TopProof xs)
-    Implication e | matchingScoped (==Given e) acc && (not $ null xs) -> removeDuplicatesHelper acc (TopProof xs)
-    Implication e-> removeDuplicatesHelper (TopProof $ as++[Implication e]) (TopProof xs)
+    Implication e | matchingExpression (==e) acc && (not $ null xs) -> removeDuplicatesHelper acc (TopProof xs)
+    Implication e-> removeDuplicatesHelper (appendSection acc (Implication e)) (TopProof xs)
     where (TopProof (x:xs)) = outer
-          (TopProof as) = acc
+          as = case acc of
+            (TopProof xs)->xs
+            (Proof p xs)->xs
 
 sectionToDisplay :: ProofSection -> FitchDisplay
 sectionToDisplay (Given expr) = GivenDisplay expr 
