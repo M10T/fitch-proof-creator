@@ -9,7 +9,8 @@ module FitchTransform
         matchingSubproof,
         matchingScoped,
         matchingScopedExpression,
-        appendSection
+        appendSection,
+        getGivens
     )
 where
 
@@ -131,7 +132,7 @@ indirectProvable proof e1 (Expr Implies e2 e3)
 indirectProvable _ _ _ = False
 
 proveIndirect :: FitchProof -> Expression -> Expression -> FitchProof
-proveIndirect proof result premise | result == premise = proof
+proveIndirect proof result premise | direct result premise = addImplication proof result
 proveIndirect proof (Expr And e1 e2) e3 = addImplication initialProof (Expr And e1 e2)
     where initialProof = proveIndirect (proveIndirect proof e1 e3) e2 e3 
 proveIndirect proof result (Expr And e1 e2)

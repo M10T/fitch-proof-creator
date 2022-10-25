@@ -73,7 +73,7 @@ formResp =
           line "" = H.br
           line s = H.p $ H.toHtml s
           disp :: Maybe FitchProof -> [H.Html]
-          disp (Just x) = map line ((proofToLines . removeDuplicates) x)
+          disp (Just x) = map line ((proofToLines . optimize) x)
           disp (Nothing) = []
 
 main :: IO ()
